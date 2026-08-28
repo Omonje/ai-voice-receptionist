@@ -1,0 +1,398 @@
+{
+  "name": "AI Voice Receptionist - Booking & Call Log",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "vapi-check-availability",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "90000000-5555-4444-9000-900000000001",
+      "name": "Webhook: Check Availability",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-1200, -560],
+      "webhookId": "vapi-check-availability"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const toolCall = $json.body?.message?.toolCallList?.[0] || {};\nconst args = toolCall.function?.arguments || {};\n\nconst now = new Date();\nconst startWindow = new Date(now.getTime() + 60 * 60 * 1000);\nconst endWindow = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000);\n\nreturn {\n  toolCallId: toolCall.id || '',\n  start: startWindow.toISOString(),\n  end: endWindow.toISOString(),\n  urgency: args.urgency || 'Routine'\n};"
+      },
+      "id": "90000000-5555-4444-9000-900000000002",
+      "name": "Code: Parse Availability Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-976, -560]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.cal.com/v2/slots?eventTypeId=6835123&start={{ $json.start }}&end={{ $json.end }}&timeZone=America/New_York",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "cal-api-version",
+              "value": "2024-09-04"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "90000000-5555-4444-9000-900000000003",
+      "name": "Cal.com: Get Available Slots",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-752, -560],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_YOUR_CALCOM_HEADER_CREDENTIAL_ID",
+          "name": "Cal.com API Key (Header Auth)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const toolCallId = $('Code: Parse Availability Request').item.json.toolCallId;\nlet resultText;\n\ntry {\n  const slots = $json.data || $json.slots || [];\n  const flat = Array.isArray(slots) ? slots : Object.values(slots).flat();\n  const top = flat.slice(0, 3);\n\n  if (!top.length) {\n    resultText = 'No slots came back from the calendar in the next few days. Tell the caller a team member will call them back within the hour to schedule.';\n  } else {\n    const lines = top.map((s, i) => {\n      const t = s.start || s.time || s;\n      const iso = new Date(t).toISOString();\n      const readable = new Date(t).toLocaleString('en-US', { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });\n      return `${i + 1}. ${readable} (exact ISO value to use if chosen: ${iso})`;\n    });\n    resultText = 'Available times:\\n' + lines.join('\\n') + '\\n\\nRead the caller the day/time in plain language for each option. Once they pick one, call book_appointment using the EXACT ISO value shown above for that option as selectedStartTime — copy it exactly, do not reconstruct or guess the date/year yourself.';\n  }\n} catch (e) {\n  resultText = 'Could not reach the calendar system. Tell the caller a team member will call them back within the hour to schedule.';\n}\n\nreturn { toolCallId, resultText };"
+      },
+      "id": "90000000-5555-4444-9000-900000000004",
+      "name": "Code: Format Available Slots",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-528, -560]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { results: [ { toolCallId: $json.toolCallId, result: $json.resultText } ] } }}",
+        "options": {}
+      },
+      "id": "90000000-5555-4444-9000-900000000005",
+      "name": "Respond: Available Slots",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [-304, -560]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "vapi-book-appointment",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "90000000-5555-4444-9000-900000000006",
+      "name": "Webhook: Book Appointment",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-1200, -224],
+      "webhookId": "vapi-book-appointment"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const toolCall = $json.body?.message?.toolCallList?.[0] || {};\nconst args = toolCall.function?.arguments || {};\n\nreturn {\n  toolCallId: toolCall.id || '',\n  callerName: args.callerName || '',\n  callerPhone: args.callerPhone || '',\n  propertyAddress: args.propertyAddress || '',\n  issueDescription: args.issueDescription || '',\n  category: args.category || 'General',\n  urgency: args.urgency || 'Routine',\n  selectedStartTime: args.selectedStartTime || ''\n};"
+      },
+      "id": "90000000-5555-4444-9000-900000000007",
+      "name": "Code: Parse Booking Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-976, -224]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.cal.com/v2/bookings",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "cal-api-version",
+              "value": "2026-02-25"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  eventTypeId: 6835123,\n  start: $json.selectedStartTime,\n  attendee: {\n    name: $json.callerName,\n    email: 'blessingomonjeva+caller@gmail.com',\n    phoneNumber: $json.callerPhone,\n    timeZone: 'America/New_York'\n  },\n  metadata: {\n    propertyAddress: $json.propertyAddress,\n    issueDescription: $json.issueDescription,\n    category: $json.category,\n    urgency: $json.urgency\n  }\n}) }}",
+        "options": {}
+      },
+      "id": "90000000-5555-4444-9000-900000000008",
+      "name": "Cal.com: Create Booking",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-752, -224],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_YOUR_CALCOM_HEADER_CREDENTIAL_ID",
+          "name": "Cal.com API Key (Header Auth)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const toolCallId = $('Code: Parse Booking Request').item.json.toolCallId;\nconst selectedStartTime = $('Code: Parse Booking Request').item.json.selectedStartTime;\nlet resultText;\n\nif ($json.error) {\n  resultText = \"Couldn't confirm that slot automatically. Tell the caller a team member will call them back within the hour to lock in the time.\";\n} else {\n  const when = new Date(selectedStartTime).toLocaleString('en-US', { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });\n  resultText = `Booked for ${when}. Read this exact time back to the caller to confirm, then end the call.`;\n}\n\nreturn { toolCallId, resultText };"
+      },
+      "id": "90000000-5555-4444-9000-900000000009",
+      "name": "Code: Format Booking Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-528, -224]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { results: [ { toolCallId: $json.toolCallId, result: $json.resultText } ] } }}",
+        "options": {}
+      },
+      "id": "90000000-5555-4444-9000-90000000000a",
+      "name": "Respond: Booking Result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [-304, -224]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "vapi-end-of-call",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "90000000-5555-4444-9000-90000000000b",
+      "name": "Webhook: Vapi End of Call",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-1200, 112],
+      "webhookId": "vapi-end-of-call"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.body.message.type }}",
+              "rightValue": "end-of-call-report",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "90000000-5555-4444-9000-900000000013",
+      "name": "IF: Is End-of-Call Report",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-1088, 112]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const msg = $json.body?.message || {};\nconst call = msg.call || {};\n\nlet intake = null;\nlet bookingConfirmed = false;\nlet bookedTime = null;\n\ntry {\n  const messages = msg.artifact?.messages || [];\n  for (const m of messages) {\n    const calls = m.toolCallList || m.toolCalls || (m.toolCallId ? [m] : []);\n    for (const c of calls) {\n      const name = c.function?.name || c.name;\n      if (name === 'check_availability') {\n        const argsRaw = c.function?.arguments || c.arguments;\n        try {\n          intake = typeof argsRaw === 'string' ? JSON.parse(argsRaw) : (argsRaw || intake);\n        } catch (e) {\n          // keep whatever intake already was\n        }\n      }\n      if (name === 'book_appointment') {\n        bookingConfirmed = true;\n        const bookArgsRaw = c.function?.arguments || c.arguments;\n        try {\n          const bookArgs = typeof bookArgsRaw === 'string' ? JSON.parse(bookArgsRaw) : bookArgsRaw;\n          bookedTime = bookArgs?.selectedStartTime || bookedTime;\n        } catch (e) {\n          // keep whatever bookedTime already was\n        }\n      }\n    }\n  }\n} catch (e) {\n  // fall through to defaults below\n}\n\nconst durationSeconds = msg.durationSeconds || 0;\nlet callOutcome = 'Missed Call';\nif (bookingConfirmed) callOutcome = 'Booked';\nelse if (intake) callOutcome = 'Intake Only - Callback Needed';\n\nreturn {\n  callerName: intake?.callerName || '',\n  callerPhone: intake?.callerPhone || call.customer?.number || '',\n  propertyAddress: intake?.propertyAddress || '',\n  issueDescription: intake?.issueDescription || '',\n  category: intake?.category || 'General',\n  urgency: intake?.urgency || 'Routine',\n  callOutcome,\n  bookedTime: bookedTime || undefined,\n  durationSeconds,\n  isMissedCall: callOutcome === 'Missed Call'\n};"
+      },
+      "id": "90000000-5555-4444-9000-90000000000c",
+      "name": "Code: Parse Call Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-976, 112]
+    },
+    {
+      "parameters": {
+        "authentication": "airtableTokenApi",
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "appRqqc4V8gZIp3LY"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "tbluTt915lHl3XC7A"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Caller Name": "={{ $json.callerName }}",
+            "Caller Phone": "={{ $json.callerPhone }}",
+            "Property Address": "={{ $json.propertyAddress }}",
+            "Issue Description": "={{ $json.issueDescription }}",
+            "Category": "={{ $json.category }}",
+            "Urgency": "={{ $json.urgency }}",
+            "Call Outcome": "={{ $json.callOutcome }}",
+            "Call Duration (sec)": "={{ $json.durationSeconds }}",
+            "Call Timestamp": "={{ $now.toISO() }}",
+            "Booked Appointment Time": "={{ $json.bookedTime }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "90000000-5555-4444-9000-90000000000d",
+      "name": "Airtable: Log Call",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [-752, 112],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "REPLACE_WITH_YOUR_AIRTABLE_CREDENTIAL_ID",
+          "name": "Airtable account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $('Code: Parse Call Report').item.json.isMissedCall }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "90000000-5555-4444-9000-90000000000e",
+      "name": "IF: Was Call Missed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-528, 112]
+    },
+    {
+      "parameters": {
+        "from": "REPLACE_WITH_YOUR_TWILIO_NUMBER",
+        "to": "={{ $('Code: Parse Call Report').item.json.callerPhone }}",
+        "message": "=Sorry we missed your call at Harborview Home Services! Reply here or call us back and we'll get your repair scheduled. For anything urgent (flooding, no heat, gas smell), please call again right away.",
+        "options": {}
+      },
+      "id": "90000000-5555-4444-9000-90000000000f",
+      "name": "Twilio: Send Missed Call SMS",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [-304, 48],
+      "credentials": {
+        "twilioApi": {
+          "id": "REPLACE_WITH_YOUR_TWILIO_CREDENTIAL_ID",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Two Different Kinds of Webhook, On Purpose\n**Check Availability** and **Book Appointment** are LIVE, synchronous tools Vapi calls mid-call and waits on for a response — the caller is on hold for whatever these take, so they call Cal.com directly and return fast. **End of Call** is fire-and-forget: Vapi sends it after the call is already over, so it just logs to Airtable and fires the missed-call SMS with no one waiting on the response (`responseMode: onReceived`).\n\nBoth Cal.com HTTP Request nodes use `onError: continueRegularOutput` deliberately — if the calendar API fails mid-call, the workflow doesn't error out and leave the caller in dead air. The formatting step right after checks for that failure and hands the AI a fallback line (\"team will call back\") instead.",
+        "height": 320,
+        "width": 900,
+        "color": 4
+      },
+      "id": "90000000-5555-4444-9000-900000000010",
+      "name": "Note: Live Tools vs Post-Call Webhook",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-1200, -800]
+    },
+    {
+      "parameters": {
+        "content": "## Parsing Vapi's Payloads Is a First Draft\nThe exact shape of Vapi's tool-call and end-of-call-report webhooks can shift between API versions, and this was written before seeing a real payload. Every Code node here defaults to safe fallback values (empty strings, 'Missed Call', a generic callback line) rather than throwing, so a schema mismatch degrades gracefully instead of breaking the call — but the field paths (`message.toolCallList`, `message.artifact.messages`) need confirming against a real execution log and adjusting if Vapi's actual structure differs.",
+        "height": 260,
+        "width": 700,
+        "color": 6
+      },
+      "id": "90000000-5555-4444-9000-900000000011",
+      "name": "Note: Payload Parsing Caveat",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-1200, 320]
+    },
+    {
+      "parameters": {
+        "content": "## Why the Booking Attendee Email Is Fixed, Not Collected\nCal.com's booking API requires a real, deliverable attendee email, but this workflow deliberately doesn't ask the caller for one. Email is painful to collect over voice (spelling it out, domain confusion) and callers phoning a home-service line don't expect an email exchange the way a webinar signup implies one. The caller's real confirmation is the voice read-back on the call itself, plus their phone number for follow-up — Cal.com's own confirmation email is an internal record, not the customer-facing touchpoint.\n\nFor a real client this would be the business's own booking-notifications inbox (e.g. `bookings@clientdomain.com`), not something collected per caller either.",
+        "height": 260,
+        "width": 700,
+        "color": 5
+      },
+      "id": "90000000-5555-4444-9000-900000000012",
+      "name": "Note: Booking Email Design Choice",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-976, -60]
+    }
+  ],
+  "connections": {
+    "Webhook: Check Availability": {
+      "main": [[{ "node": "Code: Parse Availability Request", "type": "main", "index": 0 }]]
+    },
+    "Code: Parse Availability Request": {
+      "main": [[{ "node": "Cal.com: Get Available Slots", "type": "main", "index": 0 }]]
+    },
+    "Cal.com: Get Available Slots": {
+      "main": [[{ "node": "Code: Format Available Slots", "type": "main", "index": 0 }]]
+    },
+    "Code: Format Available Slots": {
+      "main": [[{ "node": "Respond: Available Slots", "type": "main", "index": 0 }]]
+    },
+    "Webhook: Book Appointment": {
+      "main": [[{ "node": "Code: Parse Booking Request", "type": "main", "index": 0 }]]
+    },
+    "Code: Parse Booking Request": {
+      "main": [[{ "node": "Cal.com: Create Booking", "type": "main", "index": 0 }]]
+    },
+    "Cal.com: Create Booking": {
+      "main": [[{ "node": "Code: Format Booking Result", "type": "main", "index": 0 }]]
+    },
+    "Code: Format Booking Result": {
+      "main": [[{ "node": "Respond: Booking Result", "type": "main", "index": 0 }]]
+    },
+    "Webhook: Vapi End of Call": {
+      "main": [[{ "node": "IF: Is End-of-Call Report", "type": "main", "index": 0 }]]
+    },
+    "IF: Is End-of-Call Report": {
+      "main": [
+        [{ "node": "Code: Parse Call Report", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Code: Parse Call Report": {
+      "main": [[{ "node": "Airtable: Log Call", "type": "main", "index": 0 }]]
+    },
+    "Airtable: Log Call": {
+      "main": [[{ "node": "IF: Was Call Missed?", "type": "main", "index": 0 }]]
+    },
+    "IF: Was Call Missed?": {
+      "main": [
+        [{ "node": "Twilio: Send Missed Call SMS", "type": "main", "index": 0 }],
+        []
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}
