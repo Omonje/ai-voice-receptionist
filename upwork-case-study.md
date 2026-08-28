@@ -7,7 +7,8 @@ loop, greeting through a confirmed booked time, next to the matching
 Cal.com booking and Airtable call log row.
 
 **Links to include in the listing:** [README.md](README.md),
-[vapi-assistant-config.md](vapi-assistant-config.md)
+[vapi-assistant-config.md](vapi-assistant-config.md),
+[live call log dashboard](https://harborview-call-log.lovable.app)
 
 **Description:**
 
@@ -31,6 +32,11 @@ If the call doesn't end in a booking (no answer engaged, the caller hangs
 up, nothing available), the system logs it and sends a follow-up text
 automatically, so no lead falls through purely because the AI couldn't
 close the loop live.
+
+A call log dashboard gives the business owner a plain view into what the
+AI actually did on every call, total calls, booked rate, missed calls, and
+a filterable log by category, urgency, and outcome, without needing to
+open n8n or a spreadsheet.
 
 **Skills tags:** Vapi, n8n, Cal.com API, Voice AI, LLM Function Calling,
 API Integration, Twilio, Real-Time Systems, Airtable, Workflow Automation

@@ -1,5 +1,7 @@
 # AI Voice Receptionist / Missed-Call Recovery
 
+**Live call log dashboard:** [harborview-call-log.lovable.app](https://harborview-call-log.lovable.app)
+
 ## The problem this solves
 
 A home service business misses revenue every time the phone rings and nobody
@@ -48,6 +50,21 @@ multiple tool calls in one conversation, handle a slot becoming unavailable
 mid-call, and never leave the caller in dead air while an API call is in
 flight. That's the harder, more valuable version, and it's the one this
 project set out to prove.
+
+## The call log dashboard (Lovable)
+
+A separate small app (`harborview-call-log.lovable.app`) gives a non-technical
+business owner a real view into what the AI receptionist is doing: total
+calls, booked rate, missed calls, average call length, and a filterable log
+of every call with its outcome.
+
+It runs on its own Supabase database seeded with representative demo data
+(the same category/urgency/outcome mix this build actually produced during
+testing), not a live read from the Airtable base n8n writes to. For a real
+client, the dashboard would point at that same Airtable base (or whatever
+system of record they use) instead of its own seeded table — kept separate
+here so the dashboard demo doesn't depend on a live n8n/ngrok tunnel being
+up to load.
 
 ## Design decisions worth knowing before reading the code
 
