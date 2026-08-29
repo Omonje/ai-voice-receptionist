@@ -47,7 +47,8 @@ API Integration, Twilio, Real-Time Systems, Airtable, Workflow Automation
 - [ ] Loom recorded, walking through one full call: greeting through a
       confirmed live booking, showing the Cal.com booking and Airtable log
       appearing in real time
-- [ ] Repo is public and includes the latest workflow.json and
-      vapi-assistant-config.md
+- [ ] Repo is public and includes the latest workflow.json,
+      vapi-assistant-config.md, ARCHITECTURE.md, BUSINESS-CASE.md, and
+      DEPLOYMENT.md (premium deliverable bar)
 - [ ] Case study description above has no leftover placeholder text
       before copy-pasting into the Upwork listing

@@ -1,5 +1,7 @@
 # AI Voice Receptionist / Missed-Call Recovery
 
+**Docs:** [Architecture](ARCHITECTURE.md) · [Business Case](BUSINESS-CASE.md) · [Deployment Notes](DEPLOYMENT.md) · [Vapi Assistant Config](vapi-assistant-config.md)
+
 **Live call log dashboard:** [harborview-call-log.lovable.app](https://harborview-call-log.lovable.app)
 
 ## The problem this solves
