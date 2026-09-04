@@ -59,7 +59,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const toolCallId = $('Code: Parse Availability Request').item.json.toolCallId;\nlet resultText;\n\ntry {\n  const slots = $json.data || $json.slots || [];\n  const flat = Array.isArray(slots) ? slots : Object.values(slots).flat();\n  const top = flat.slice(0, 3);\n\n  if (!top.length) {\n    resultText = 'No slots came back from the calendar in the next few days. Tell the caller a team member will call them back within the hour to schedule.';\n  } else {\n    const lines = top.map((s, i) => {\n      const t = s.start || s.time || s;\n      const iso = new Date(t).toISOString();\n      const readable = new Date(t).toLocaleString('en-US', { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });\n      return `${i + 1}. ${readable} (exact ISO value to use if chosen: ${iso})`;\n    });\n    resultText = 'Available times:\\n' + lines.join('\\n') + '\\n\\nRead the caller the day/time in plain language for each option. Once they pick one, call book_appointment using the EXACT ISO value shown above for that option as selectedStartTime — copy it exactly, do not reconstruct or guess the date/year yourself.';\n  }\n} catch (e) {\n  resultText = 'Could not reach the calendar system. Tell the caller a team member will call them back within the hour to schedule.';\n}\n\nreturn { toolCallId, resultText };"
+        "jsCode": "const toolCallId = $('Code: Parse Availability Request').item.json.toolCallId;\n// $json here is Cal.com's response, not the original webhook body - the\n// call id has to be pulled from the webhook trigger node explicitly, not\n// assumed to still be on $json this far downstream.\nconst webhookBody = $('Webhook: Check Availability').item.json.body || {};\nconst callId = webhookBody.message?.call?.id || webhookBody.call?.id || '';\nlet resultText;\n\ntry {\n  const slots = $json.data || $json.slots || [];\n  const flat = Array.isArray(slots) ? slots : Object.values(slots).flat();\n  const top = flat.slice(0, 3);\n\n  if (!top.length) {\n    resultText = 'No slots came back from the calendar in the next few days. Tell the caller a team member will call them back within the hour to schedule.';\n  } else {\n    // The model is unreliable at reproducing an exact ISO date string, so it\n    // never has to - it only ever picks an option number, and n8n resolves\n    // the real timestamp from what was actually offered. Stashed in workflow\n    // static data, keyed by call id, since check_availability and\n    // book_appointment are separate webhook calls with no shared memory.\n    const isoTimes = top.map(s => new Date(s.start || s.time || s).toISOString());\n    const staticData = $getWorkflowStaticData('global');\n    staticData.offeredSlots = staticData.offeredSlots || {};\n    staticData.offeredSlots[callId] = isoTimes;\n\n    const lines = isoTimes.map((iso, i) => {\n      const readable = new Date(iso).toLocaleString('en-US', { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });\n      return `${i + 1}. ${readable}`;\n    });\n    resultText = 'Available times:\\n' + lines.join('\\n') + '\\n\\nRead the caller these options in plain language. Once they pick one, call book_appointment with selectedOption set to that option\\'s number (1, 2, or 3) - never state or reconstruct a date/time yourself, just pass the number.';\n  }\n} catch (e) {\n  resultText = 'Could not reach the calendar system. Tell the caller a team member will call them back within the hour to schedule.';\n}\n\nreturn { toolCallId, resultText };"
       },
       "id": "90000000-5555-4444-9000-900000000004",
       "name": "Code: Format Available Slots",
@@ -96,7 +96,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const toolCall = $json.body?.message?.toolCallList?.[0] || {};\nconst args = toolCall.function?.arguments || {};\n\nreturn {\n  toolCallId: toolCall.id || '',\n  callerName: args.callerName || '',\n  callerPhone: args.callerPhone || '',\n  propertyAddress: args.propertyAddress || '',\n  issueDescription: args.issueDescription || '',\n  category: args.category || 'General',\n  urgency: args.urgency || 'Routine',\n  selectedStartTime: args.selectedStartTime || ''\n};"
+        "jsCode": "const toolCall = $json.body?.message?.toolCallList?.[0] || {};\nconst args = toolCall.function?.arguments || {};\nconst callId = $json.body?.message?.call?.id || $json.body?.call?.id || '';\n\n// Resolve the real ISO time from what check_availability actually offered,\n// keyed by call id - the model only ever passes an option number, never a\n// date it has to reproduce itself.\nconst staticData = $getWorkflowStaticData('global');\nconst offered = (staticData.offeredSlots && staticData.offeredSlots[callId]) || [];\nconst optionIndex = parseInt(args.selectedOption, 10);\nlet selectedStartTime = (optionIndex >= 1 && optionIndex <= offered.length) ? offered[optionIndex - 1] : '';\n\n// Defense in depth: even a resolved slot must still be a valid future time.\nconst parsed = selectedStartTime ? new Date(selectedStartTime) : null;\nif (!parsed || isNaN(parsed.getTime()) || parsed.getTime() <= Date.now()) {\n  selectedStartTime = '';\n}\n\n// Clean up now that it's been consumed, so static data doesn't grow\n// unbounded across calls.\nif (staticData.offeredSlots) delete staticData.offeredSlots[callId];\n\nreturn {\n  toolCallId: toolCall.id || '',\n  callerName: args.callerName || '',\n  callerPhone: args.callerPhone || '',\n  propertyAddress: args.propertyAddress || '',\n  issueDescription: args.issueDescription || '',\n  category: args.category || 'General',\n  urgency: args.urgency || 'Routine',\n  selectedStartTime\n};"
       },
       "id": "90000000-5555-4444-9000-900000000007",
       "name": "Code: Parse Booking Request",
@@ -140,7 +140,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const toolCallId = $('Code: Parse Booking Request').item.json.toolCallId;\nconst selectedStartTime = $('Code: Parse Booking Request').item.json.selectedStartTime;\nlet resultText;\n\nif ($json.error) {\n  resultText = \"Couldn't confirm that slot automatically. Tell the caller a team member will call them back within the hour to lock in the time.\";\n} else {\n  const when = new Date(selectedStartTime).toLocaleString('en-US', { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });\n  resultText = `Booked for ${when}. Read this exact time back to the caller to confirm, then end the call.`;\n}\n\nreturn { toolCallId, resultText };"
+        "jsCode": "const toolCallId = $('Code: Parse Booking Request').item.json.toolCallId;\nconst selectedStartTime = $('Code: Parse Booking Request').item.json.selectedStartTime;\nlet resultText;\n\nif ($json.error) {\n  resultText = \"Couldn't confirm that slot automatically. Tell the caller a team member will call them back within the hour to lock in the time.\";\n} else {\n  const when = new Date(selectedStartTime).toLocaleString('en-US', { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });\n  // The bracketed tag is a machine-readable marker for the end-of-call\n  // parser, not meant for the caller - the model reads results like this\n  // and re-expresses them in its own words already, same as the earlier\n  // availability results included a parenthetical ISO hint.\n  resultText = `Booked for ${when}. Read this exact time back to the caller to confirm, then end the call. [BOOKING_CONFIRMED:${selectedStartTime}]`;\n}\n\nreturn { toolCallId, resultText };"
       },
       "id": "90000000-5555-4444-9000-900000000009",
       "name": "Code: Format Booking Result",
@@ -205,13 +205,81 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const msg = $json.body?.message || {};\nconst call = msg.call || {};\n\nlet intake = null;\nlet bookingConfirmed = false;\nlet bookedTime = null;\n\ntry {\n  const messages = msg.artifact?.messages || [];\n  for (const m of messages) {\n    const calls = m.toolCallList || m.toolCalls || (m.toolCallId ? [m] : []);\n    for (const c of calls) {\n      const name = c.function?.name || c.name;\n      if (name === 'check_availability') {\n        const argsRaw = c.function?.arguments || c.arguments;\n        try {\n          intake = typeof argsRaw === 'string' ? JSON.parse(argsRaw) : (argsRaw || intake);\n        } catch (e) {\n          // keep whatever intake already was\n        }\n      }\n      if (name === 'book_appointment') {\n        bookingConfirmed = true;\n        const bookArgsRaw = c.function?.arguments || c.arguments;\n        try {\n          const bookArgs = typeof bookArgsRaw === 'string' ? JSON.parse(bookArgsRaw) : bookArgsRaw;\n          bookedTime = bookArgs?.selectedStartTime || bookedTime;\n        } catch (e) {\n          // keep whatever bookedTime already was\n        }\n      }\n    }\n  }\n} catch (e) {\n  // fall through to defaults below\n}\n\nconst durationSeconds = msg.durationSeconds || 0;\nlet callOutcome = 'Missed Call';\nif (bookingConfirmed) callOutcome = 'Booked';\nelse if (intake) callOutcome = 'Intake Only - Callback Needed';\n\nreturn {\n  callerName: intake?.callerName || '',\n  callerPhone: intake?.callerPhone || call.customer?.number || '',\n  propertyAddress: intake?.propertyAddress || '',\n  issueDescription: intake?.issueDescription || '',\n  category: intake?.category || 'General',\n  urgency: intake?.urgency || 'Routine',\n  callOutcome,\n  bookedTime: bookedTime || undefined,\n  durationSeconds,\n  isMissedCall: callOutcome === 'Missed Call'\n};"
+        "jsCode": "const msg = $json.body?.message || {};\nconst call = msg.call || {};\n\nlet intake = null;\nlet bookingConfirmed = false;\nlet bookedTime = null;\n\ntry {\n  const messages = msg.artifact?.messages || [];\n  for (const m of messages) {\n    const calls = m.toolCallList || m.toolCalls || (m.toolCallId ? [m] : []);\n    for (const c of calls) {\n      const name = c.function?.name || c.name;\n      if (name === 'check_availability') {\n        const argsRaw = c.function?.arguments || c.arguments;\n        try {\n          intake = typeof argsRaw === 'string' ? JSON.parse(argsRaw) : (argsRaw || intake);\n        } catch (e) {\n          // keep whatever intake already was\n        }\n      }\n    }\n\n    // The AI's own book_appointment arguments only prove an attempt was\n    // made, not that Cal.com actually confirmed it - selectedOption is just\n    // an index, not proof of success. The real signal is the tool's actual\n    // result, tagged with a machine-readable marker when the booking really\n    // went through (see Code: Format Booking Result).\n    if (m.role === 'tool_call_result' && m.name === 'book_appointment' && typeof m.result === 'string') {\n      const match = m.result.match(/\\[BOOKING_CONFIRMED:(.+?)\\]/);\n      if (match) {\n        bookingConfirmed = true;\n        bookedTime = match[1];\n      }\n    }\n  }\n} catch (e) {\n  // fall through to defaults below\n}\n\nconst durationSeconds = msg.durationSeconds || 0;\nlet callOutcome = 'Missed Call';\nif (bookingConfirmed) callOutcome = 'Booked';\nelse if (intake) callOutcome = 'Intake Only - Callback Needed';\n\nreturn {\n  callerName: intake?.callerName || '',\n  callerPhone: intake?.callerPhone || call.customer?.number || '',\n  propertyAddress: intake?.propertyAddress || '',\n  issueDescription: intake?.issueDescription || '',\n  category: intake?.category || 'General',\n  urgency: intake?.urgency || 'Routine',\n  callOutcome,\n  bookedTime: bookedTime || undefined,\n  durationSeconds,\n  isMissedCall: callOutcome === 'Missed Call'\n};"
       },
       "id": "90000000-5555-4444-9000-90000000000c",
       "name": "Code: Parse Call Report",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [-976, 112]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.callOutcome }}",
+              "rightValue": "Booked",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "90000000-5555-4444-9000-900000000016",
+      "name": "IF: Should Assign Technician?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-864, 112]
+    },
+    {
+      "parameters": {
+        "authentication": "airtableTokenApi",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "appRqqc4V8gZIp3LY"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "tblNVuedVm9W2YXTF"
+        },
+        "filterByFormula": "=AND({Active}=TRUE(), OR({Specialty}='{{ $json.category }}', {Specialty}='General'))",
+        "options": {}
+      },
+      "id": "90000000-5555-4444-9000-900000000017",
+      "name": "Airtable: Find Available Technician",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [-800, 48],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "REPLACE_WITH_YOUR_AIRTABLE_CREDENTIAL_ID",
+          "name": "Airtable account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const report = $('Code: Parse Call Report').item.json;\nconst tech = $json.fields || {};\n\nreturn {\n  ...report,\n  assignedTechName: tech['Name'] || '',\n  assignedTechPhone: tech['Phone'] || ''\n};"
+      },
+      "id": "90000000-5555-4444-9000-900000000018",
+      "name": "Code: Merge Assigned Technician",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-816, 48]
     },
     {
       "parameters": {
@@ -239,7 +307,9 @@
             "Call Outcome": "={{ $json.callOutcome }}",
             "Call Duration (sec)": "={{ $json.durationSeconds }}",
             "Call Timestamp": "={{ $now.toISO() }}",
-            "Booked Appointment Time": "={{ $json.bookedTime }}"
+            "Booked Appointment Time": "={{ $json.bookedTime ? $json.bookedTime : undefined }}",
+            "Assigned Technician Name": "={{ $json.assignedTechName ? $json.assignedTechName : undefined }}",
+            "Assigned Technician Phone": "={{ $json.assignedTechPhone ? $json.assignedTechPhone : undefined }}"
           }
         },
         "options": {}
@@ -259,34 +329,6 @@
     },
     {
       "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict"
-          },
-          "conditions": [
-            {
-              "leftValue": "={{ $('Code: Parse Call Report').item.json.isMissedCall }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "true"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "90000000-5555-4444-9000-90000000000e",
-      "name": "IF: Was Call Missed?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [-528, 112]
-    },
-    {
-      "parameters": {
         "from": "REPLACE_WITH_YOUR_TWILIO_NUMBER",
         "to": "={{ $('Code: Parse Call Report').item.json.callerPhone }}",
         "message": "=Sorry we missed your call at Harborview Home Services! Reply here or call us back and we'll get your repair scheduled. For anything urgent (flooding, no heat, gas smell), please call again right away.",
@@ -297,6 +339,144 @@
       "type": "n8n-nodes-base.twilio",
       "typeVersion": 1,
       "position": [-304, 48],
+      "credentials": {
+        "twilioApi": {
+          "id": "REPLACE_WITH_YOUR_TWILIO_CREDENTIAL_ID",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "rules",
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('Code: Parse Call Report').item.json.callOutcome }}",
+                    "rightValue": "Missed Call",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Missed Call"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('Code: Parse Call Report').item.json.callOutcome }}",
+                    "rightValue": "Booked",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Booked"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('Code: Parse Call Report').item.json.callOutcome }}",
+                    "rightValue": "Intake Only - Callback Needed",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Intake Only"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "90000000-5555-4444-9000-900000000014",
+      "name": "Switch: Call Outcome",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [-528, 176]
+    },
+    {
+      "parameters": {
+        "from": "REPLACE_WITH_YOUR_TWILIO_NUMBER",
+        "to": "={{ $('Code: Parse Call Report').item.json.callerPhone }}",
+        "message": "=Hi! Your Harborview Home Services appointment is confirmed for {{ new Date($('Code: Parse Call Report').item.json.bookedTime).toLocaleString('en-US', { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) }}. {{ $('Airtable: Log Call').item.json.fields['Assigned Technician Name'] }} will be your technician for: {{ $('Code: Parse Call Report').item.json.issueDescription }}. Reply here if anything changes.",
+        "options": {}
+      },
+      "id": "90000000-5555-4444-9000-900000000015",
+      "name": "Twilio: Send Booking Confirmation SMS",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [-304, 240],
+      "credentials": {
+        "twilioApi": {
+          "id": "REPLACE_WITH_YOUR_TWILIO_CREDENTIAL_ID",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "from": "REPLACE_WITH_YOUR_TWILIO_NUMBER",
+        "to": "={{ $('Airtable: Log Call').item.json.fields['Assigned Technician Phone'] }}",
+        "message": "=New job assigned: {{ $('Code: Parse Call Report').item.json.callerName }}, {{ $('Code: Parse Call Report').item.json.propertyAddress }}. Issue: {{ $('Code: Parse Call Report').item.json.issueDescription }} ({{ $('Code: Parse Call Report').item.json.category }}, {{ $('Code: Parse Call Report').item.json.urgency }}). Scheduled: {{ new Date($('Code: Parse Call Report').item.json.bookedTime).toLocaleString('en-US', { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) }}. Customer phone: {{ $('Code: Parse Call Report').item.json.callerPhone }}.",
+        "options": {}
+      },
+      "id": "90000000-5555-4444-9000-900000000019",
+      "name": "Twilio: Notify Technician",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [-304, 336],
+      "credentials": {
+        "twilioApi": {
+          "id": "REPLACE_WITH_YOUR_TWILIO_CREDENTIAL_ID",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "from": "REPLACE_WITH_YOUR_TWILIO_NUMBER",
+        "to": "={{ $('Code: Parse Call Report').item.json.callerPhone }}",
+        "message": "=Thanks for calling Harborview Home Services! We have your request for {{ $('Code: Parse Call Report').item.json.issueDescription }} and a team member will call you back within the hour to get you scheduled. Reply here if anything changes in the meantime.",
+        "options": {}
+      },
+      "id": "90000000-5555-4444-9000-90000000001a",
+      "name": "Twilio: Send Callback Needed SMS",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [-304, 432],
       "credentials": {
         "twilioApi": {
           "id": "REPLACE_WITH_YOUR_TWILIO_CREDENTIAL_ID",
@@ -379,15 +559,31 @@
       ]
     },
     "Code: Parse Call Report": {
+      "main": [[{ "node": "IF: Should Assign Technician?", "type": "main", "index": 0 }]]
+    },
+    "IF: Should Assign Technician?": {
+      "main": [
+        [{ "node": "Airtable: Find Available Technician", "type": "main", "index": 0 }],
+        [{ "node": "Airtable: Log Call", "type": "main", "index": 0 }]
+      ]
+    },
+    "Airtable: Find Available Technician": {
+      "main": [[{ "node": "Code: Merge Assigned Technician", "type": "main", "index": 0 }]]
+    },
+    "Code: Merge Assigned Technician": {
       "main": [[{ "node": "Airtable: Log Call", "type": "main", "index": 0 }]]
     },
     "Airtable: Log Call": {
-      "main": [[{ "node": "IF: Was Call Missed?", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Switch: Call Outcome", "type": "main", "index": 0 }]]
     },
-    "IF: Was Call Missed?": {
+    "Switch: Call Outcome": {
       "main": [
         [{ "node": "Twilio: Send Missed Call SMS", "type": "main", "index": 0 }],
-        []
+        [
+          { "node": "Twilio: Send Booking Confirmation SMS", "type": "main", "index": 0 },
+          { "node": "Twilio: Notify Technician", "type": "main", "index": 0 }
+        ],
+        [{ "node": "Twilio: Send Callback Needed SMS", "type": "main", "index": 0 }]
       ]
     }
   },
