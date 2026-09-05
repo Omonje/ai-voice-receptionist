@@ -68,12 +68,14 @@ a real client engagement changes several things.
 ## The Lovable dashboard's data source
 
 The dashboard deployed for this portfolio build (`harborview-call-log.lovable.app`)
-reads from its own seeded Supabase table, not a live connection to the
-Airtable base n8n actually writes to — deliberately, so the dashboard demo
-doesn't depend on a live n8n/ngrok tunnel being up to load. For a real
-client, the dashboard should point at the same Airtable base (or whatever
-system of record the client actually uses) instead, either via a live API
-read or a scheduled sync.
+reads live from the same Airtable "Call Log" base n8n actually writes to —
+a server function fetches Airtable's REST API directly on page load, using
+a read-only token stored as a platform secret, never exposed to the
+browser. No ngrok tunnel or n8n uptime dependency: Airtable's API is
+reachable independent of whether the local n8n/Docker stack happens to be
+running. For a real client, this same pattern (a server-side read against
+their actual system of record, scoped to a read-only credential) is the
+right approach, just pointed at whatever CRM or database they actually use.
 
 ## Before going live for a real client
 

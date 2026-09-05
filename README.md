@@ -141,13 +141,14 @@ business owner a real view into what the AI receptionist is doing: total
 calls, booked rate, missed calls, average call length, and a filterable log
 of every call with its outcome.
 
-It runs on its own Supabase database seeded with representative demo data
-(the same category/urgency/outcome mix this build actually produced during
-testing), not a live read from the Airtable base n8n writes to. For a real
-client, the dashboard would point at that same Airtable base (or whatever
-system of record they use) instead of its own seeded table — kept separate
-here so the dashboard demo doesn't depend on a live n8n/ngrok tunnel being
-up to load.
+It reads live from the same Airtable "Call Log" base n8n writes to, a
+TanStack Start server function fetches directly from Airtable's REST API
+on page load (with a manual refresh button), using a read-only Airtable
+token stored as a platform secret so it never reaches the browser. This
+was originally seeded with demo data so the dashboard didn't depend on a
+live n8n/ngrok tunnel being up to load; it now shows real calls, real
+outcomes, and the real assigned technician for every booking, not a
+representative sample.
 
 ## Design decisions worth knowing before reading the code
 
