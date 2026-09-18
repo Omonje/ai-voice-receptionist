@@ -12,7 +12,10 @@
       "name": "Webhook: Check Availability",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [-1200, -560],
+      "position": [
+        -1200,
+        -560
+      ],
       "webhookId": "vapi-check-availability"
     },
     {
@@ -24,7 +27,10 @@
       "name": "Code: Parse Availability Request",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-976, -560]
+      "position": [
+        -976,
+        -560
+      ]
     },
     {
       "parameters": {
@@ -47,14 +53,20 @@
       "name": "Cal.com: Get Available Slots",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-752, -560],
+      "position": [
+        -752,
+        -560
+      ],
       "onError": "continueRegularOutput",
       "credentials": {
         "httpHeaderAuth": {
           "id": "REPLACE_WITH_YOUR_CALCOM_HEADER_CREDENTIAL_ID",
           "name": "Cal.com API Key (Header Auth)"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
     },
     {
       "parameters": {
@@ -65,7 +77,10 @@
       "name": "Code: Format Available Slots",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-528, -560]
+      "position": [
+        -528,
+        -560
+      ]
     },
     {
       "parameters": {
@@ -77,7 +92,10 @@
       "name": "Respond: Available Slots",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [-304, -560]
+      "position": [
+        -304,
+        -560
+      ]
     },
     {
       "parameters": {
@@ -90,7 +108,10 @@
       "name": "Webhook: Book Appointment",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [-1200, -224],
+      "position": [
+        -1200,
+        -224
+      ],
       "webhookId": "vapi-book-appointment"
     },
     {
@@ -102,7 +123,10 @@
       "name": "Code: Parse Booking Request",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-976, -224]
+      "position": [
+        -976,
+        -224
+      ]
     },
     {
       "parameters": {
@@ -128,14 +152,20 @@
       "name": "Cal.com: Create Booking",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-752, -224],
+      "position": [
+        -752,
+        -224
+      ],
       "onError": "continueRegularOutput",
       "credentials": {
         "httpHeaderAuth": {
           "id": "REPLACE_WITH_YOUR_CALCOM_HEADER_CREDENTIAL_ID",
           "name": "Cal.com API Key (Header Auth)"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
     },
     {
       "parameters": {
@@ -146,7 +176,10 @@
       "name": "Code: Format Booking Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-528, -224]
+      "position": [
+        -528,
+        -224
+      ]
     },
     {
       "parameters": {
@@ -158,7 +191,10 @@
       "name": "Respond: Booking Result",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [-304, -224]
+      "position": [
+        -304,
+        -224
+      ]
     },
     {
       "parameters": {
@@ -171,7 +207,10 @@
       "name": "Webhook: Vapi End of Call",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [-1200, 112],
+      "position": [
+        -1200,
+        112
+      ],
       "webhookId": "vapi-end-of-call"
     },
     {
@@ -200,7 +239,10 @@
       "name": "IF: Is End-of-Call Report",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [-1088, 112]
+      "position": [
+        -1088,
+        112
+      ]
     },
     {
       "parameters": {
@@ -211,7 +253,63 @@
       "name": "Code: Parse Call Report",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-976, 112]
+      "position": [
+        -976,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4o-mini', messages: [ { role: 'system', content: 'Rewrite the given home-service issue description as a short, natural 3-8 word phrase with no trailing clauses or extra detail, written to complete the sentence \"your ___ issue\" naturally. Return only the phrase itself, no punctuation, no quotes.' }, { role: 'user', content: $json.issueDescription } ], temperature: 0.3, max_tokens: 20 }) }}",
+        "options": {}
+      },
+      "id": "90000000-5555-4444-9000-90000000001b",
+      "name": "OpenAI: Summarize Issue for SMS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -928,
+        112
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_YOUR_OPENAI_CREDENTIAL_ID",
+          "name": "OpenAI API Key (Header Auth)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const report = $('Code: Parse Call Report').item.json;\nlet issueSummary = report.issueDescription;\ntry {\n  const content = $json.choices?.[0]?.message?.content;\n  if (content && content.trim()) issueSummary = content.trim();\n} catch (e) {\n  // fall back to the full description if the summarizer call failed\n}\n\nreturn { ...report, issueSummary };"
+      },
+      "id": "90000000-5555-4444-9000-90000000001c",
+      "name": "Code: Merge Issue Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -896,
+        112
+      ]
     },
     {
       "parameters": {
@@ -239,7 +337,10 @@
       "name": "IF: Should Assign Technician?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [-864, 112]
+      "position": [
+        -864,
+        112
+      ]
     },
     {
       "parameters": {
@@ -262,24 +363,34 @@
       "name": "Airtable: Find Available Technician",
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.1,
-      "position": [-800, 48],
+      "position": [
+        -800,
+        48
+      ],
       "credentials": {
         "airtableTokenApi": {
           "id": "REPLACE_WITH_YOUR_AIRTABLE_CREDENTIAL_ID",
           "name": "Airtable account"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const report = $('Code: Parse Call Report').item.json;\nconst tech = $json.fields || {};\n\nreturn {\n  ...report,\n  assignedTechName: tech['Name'] || '',\n  assignedTechPhone: tech['Phone'] || ''\n};"
+        "jsCode": "const report = $('Code: Merge Issue Summary').item.json;\nconst tech = $json.fields || {};\n\nreturn {\n  ...report,\n  assignedTechName: tech['Name'] || '',\n  assignedTechPhone: tech['Phone'] || ''\n};"
       },
       "id": "90000000-5555-4444-9000-900000000018",
       "name": "Code: Merge Assigned Technician",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-816, 48]
+      "position": [
+        -816,
+        48
+      ]
     },
     {
       "parameters": {
@@ -309,7 +420,8 @@
             "Call Timestamp": "={{ $now.toISO() }}",
             "Booked Appointment Time": "={{ $json.bookedTime ? $json.bookedTime : undefined }}",
             "Assigned Technician Name": "={{ $json.assignedTechName ? $json.assignedTechName : undefined }}",
-            "Assigned Technician Phone": "={{ $json.assignedTechPhone ? $json.assignedTechPhone : undefined }}"
+            "Assigned Technician Phone": "={{ $json.assignedTechPhone ? $json.assignedTechPhone : undefined }}",
+            "Issue Summary": "={{ $json.issueSummary }}"
           }
         },
         "options": {}
@@ -318,14 +430,20 @@
       "name": "Airtable: Log Call",
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.1,
-      "position": [-752, 112],
+      "position": [
+        -752,
+        112
+      ],
       "onError": "continueRegularOutput",
       "credentials": {
         "airtableTokenApi": {
           "id": "REPLACE_WITH_YOUR_AIRTABLE_CREDENTIAL_ID",
           "name": "Airtable account"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
     },
     {
       "parameters": {
@@ -338,13 +456,19 @@
       "name": "Twilio: Send Missed Call SMS",
       "type": "n8n-nodes-base.twilio",
       "typeVersion": 1,
-      "position": [-304, 48],
+      "position": [
+        -304,
+        48
+      ],
       "credentials": {
         "twilioApi": {
           "id": "REPLACE_WITH_YOUR_TWILIO_CREDENTIAL_ID",
           "name": "Twilio account"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
     },
     {
       "parameters": {
@@ -425,26 +549,35 @@
       "name": "Switch: Call Outcome",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.2,
-      "position": [-528, 176]
+      "position": [
+        -528,
+        176
+      ]
     },
     {
       "parameters": {
         "from": "REPLACE_WITH_YOUR_TWILIO_NUMBER",
         "to": "={{ $('Code: Parse Call Report').item.json.callerPhone }}",
-        "message": "=Hi! Your Harborview Home Services appointment is confirmed for {{ new Date($('Code: Parse Call Report').item.json.bookedTime).toLocaleString('en-US', { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) }}. {{ $('Airtable: Log Call').item.json.fields['Assigned Technician Name'] }} will be your technician for: {{ $('Code: Parse Call Report').item.json.issueDescription }}. Reply here if anything changes.",
+        "message": "=Hi! Your Harborview Home Services appointment for your {{ $('Airtable: Log Call').item.json.fields['Issue Summary'] }} issue is confirmed for {{ new Date($('Code: Parse Call Report').item.json.bookedTime).toLocaleString('en-US', { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) }}, with {{ $('Airtable: Log Call').item.json.fields['Assigned Technician Name'] }}. Reply here if anything changes.",
         "options": {}
       },
       "id": "90000000-5555-4444-9000-900000000015",
       "name": "Twilio: Send Booking Confirmation SMS",
       "type": "n8n-nodes-base.twilio",
       "typeVersion": 1,
-      "position": [-304, 240],
+      "position": [
+        -304,
+        240
+      ],
       "credentials": {
         "twilioApi": {
           "id": "REPLACE_WITH_YOUR_TWILIO_CREDENTIAL_ID",
           "name": "Twilio account"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
     },
     {
       "parameters": {
@@ -457,32 +590,44 @@
       "name": "Twilio: Notify Technician",
       "type": "n8n-nodes-base.twilio",
       "typeVersion": 1,
-      "position": [-304, 336],
+      "position": [
+        -304,
+        336
+      ],
       "credentials": {
         "twilioApi": {
           "id": "REPLACE_WITH_YOUR_TWILIO_CREDENTIAL_ID",
           "name": "Twilio account"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
     },
     {
       "parameters": {
         "from": "REPLACE_WITH_YOUR_TWILIO_NUMBER",
         "to": "={{ $('Code: Parse Call Report').item.json.callerPhone }}",
-        "message": "=Thanks for calling Harborview Home Services! We have your request for {{ $('Code: Parse Call Report').item.json.issueDescription }} and a team member will call you back within the hour to get you scheduled. Reply here if anything changes in the meantime.",
+        "message": "=Thanks for calling Harborview Home Services! We have your request about your {{ $('Airtable: Log Call').item.json.fields['Issue Summary'] }} issue, and a team member will call you back within the hour to get you scheduled. Reply here if anything changes in the meantime.",
         "options": {}
       },
       "id": "90000000-5555-4444-9000-90000000001a",
       "name": "Twilio: Send Callback Needed SMS",
       "type": "n8n-nodes-base.twilio",
       "typeVersion": 1,
-      "position": [-304, 432],
+      "position": [
+        -304,
+        432
+      ],
       "credentials": {
         "twilioApi": {
           "id": "REPLACE_WITH_YOUR_TWILIO_CREDENTIAL_ID",
           "name": "Twilio account"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
     },
     {
       "parameters": {
@@ -495,7 +640,10 @@
       "name": "Note: Live Tools vs Post-Call Webhook",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [-1200, -800]
+      "position": [
+        -1200,
+        -800
+      ]
     },
     {
       "parameters": {
@@ -508,7 +656,10 @@
       "name": "Note: Payload Parsing Caveat",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [-1200, 320]
+      "position": [
+        -1200,
+        320
+      ]
     },
     {
       "parameters": {
@@ -521,74 +672,259 @@
       "name": "Note: Booking Email Design Choice",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [-976, -60]
+      "position": [
+        -976,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Error Handling Update\nThe onError: continueRegularOutput design on the Cal.com/OpenAI/Airtable\nnodes was intentional from the start (see README) - on failure the caller\nhears \"a team member will call you back within the hour\" instead of a dead\ncall, and the call still gets logged. Added on top of that: retry (3x/3s)\non all four of those nodes plus Airtable: Find Available Technician (which\npreviously had no onError at all and could kill the whole logging pipeline\non a lookup failure), so a transient blip resolves quietly instead of\nimmediately falling back. Also now points Settings -> Error Workflow at\nthe shared handler, as defense-in-depth for anything not already handled\nhere (e.g. a malformed Vapi payload).",
+        "height": 280,
+        "width": 440
+      },
+      "id": "retry-note-05",
+      "name": "Note: Error Handling Update",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -260
+      ]
     }
   ],
   "connections": {
     "Webhook: Check Availability": {
-      "main": [[{ "node": "Code: Parse Availability Request", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Code: Parse Availability Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Code: Parse Availability Request": {
-      "main": [[{ "node": "Cal.com: Get Available Slots", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Cal.com: Get Available Slots",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Cal.com: Get Available Slots": {
-      "main": [[{ "node": "Code: Format Available Slots", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Code: Format Available Slots",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Code: Format Available Slots": {
-      "main": [[{ "node": "Respond: Available Slots", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Respond: Available Slots",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Webhook: Book Appointment": {
-      "main": [[{ "node": "Code: Parse Booking Request", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Code: Parse Booking Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Code: Parse Booking Request": {
-      "main": [[{ "node": "Cal.com: Create Booking", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Cal.com: Create Booking",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Cal.com: Create Booking": {
-      "main": [[{ "node": "Code: Format Booking Result", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Code: Format Booking Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Code: Format Booking Result": {
-      "main": [[{ "node": "Respond: Booking Result", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Respond: Booking Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Webhook: Vapi End of Call": {
-      "main": [[{ "node": "IF: Is End-of-Call Report", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "IF: Is End-of-Call Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "IF: Is End-of-Call Report": {
       "main": [
-        [{ "node": "Code: Parse Call Report", "type": "main", "index": 0 }],
+        [
+          {
+            "node": "Code: Parse Call Report",
+            "type": "main",
+            "index": 0
+          }
+        ],
         []
       ]
     },
     "Code: Parse Call Report": {
-      "main": [[{ "node": "IF: Should Assign Technician?", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "OpenAI: Summarize Issue for SMS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI: Summarize Issue for SMS": {
+      "main": [
+        [
+          {
+            "node": "Code: Merge Issue Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Merge Issue Summary": {
+      "main": [
+        [
+          {
+            "node": "IF: Should Assign Technician?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "IF: Should Assign Technician?": {
       "main": [
-        [{ "node": "Airtable: Find Available Technician", "type": "main", "index": 0 }],
-        [{ "node": "Airtable: Log Call", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Airtable: Find Available Technician",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Airtable: Log Call",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Airtable: Find Available Technician": {
-      "main": [[{ "node": "Code: Merge Assigned Technician", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Code: Merge Assigned Technician",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Code: Merge Assigned Technician": {
-      "main": [[{ "node": "Airtable: Log Call", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Airtable: Log Call",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Airtable: Log Call": {
-      "main": [[{ "node": "Switch: Call Outcome", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Switch: Call Outcome",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Switch: Call Outcome": {
       "main": [
-        [{ "node": "Twilio: Send Missed Call SMS", "type": "main", "index": 0 }],
         [
-          { "node": "Twilio: Send Booking Confirmation SMS", "type": "main", "index": 0 },
-          { "node": "Twilio: Notify Technician", "type": "main", "index": 0 }
+          {
+            "node": "Twilio: Send Missed Call SMS",
+            "type": "main",
+            "index": 0
+          }
         ],
-        [{ "node": "Twilio: Send Callback Needed SMS", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Twilio: Send Booking Confirmation SMS",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Twilio: Notify Technician",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Twilio: Send Callback Needed SMS",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },
   "pinData": {},
   "meta": {
     "templateCredsSetupCompleted": true
+  },
+  "settings": {
+    "errorWorkflow": "REPLACE_WITH_SHARED_ERROR_HANDLER_WORKFLOW_ID"
   }
 }

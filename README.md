@@ -169,10 +169,19 @@ representative sample.
   what the docs suggested and what the live API actually sent during this
   build (see Troubleshooting below) — the code is written to degrade
   gracefully rather than crash the call if that happens again.
-- **`onError: continueRegularOutput` is set on both Cal.com HTTP nodes and
-  the Airtable log node.** A failed calendar call becomes a spoken fallback
-  line to the caller, not a dead call. A failed Airtable write doesn't block
-  the missed-call SMS check downstream of it.
+- **`onError: continueRegularOutput` is set on both Cal.com HTTP nodes, the
+  OpenAI summarize node, the Airtable log node, and the technician-lookup
+  node.** A failed calendar call becomes a spoken fallback line to the
+  caller, not a dead call. A failed Airtable write doesn't block the
+  missed-call SMS check downstream of it, and a failed technician lookup no
+  longer kills the whole call-logging pipeline before the call ever gets
+  recorded. All five of those retry 3x (3s apart) first, so a transient blip
+  resolves quietly instead of immediately falling back — the graceful
+  degradation is the last resort, not the first response. Every Twilio SMS
+  send also retries 3x, though those fail loud (default `onError`) since by
+  the time they run the call is already logged; Settings → Error Workflow
+  points at the shared `00-shared-error-handler/workflow.json` for anything
+  not already handled above (a malformed Vapi payload, for example).
 
 ## Known limitations (honest, not hidden)
 
