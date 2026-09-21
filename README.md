@@ -4,6 +4,22 @@
 
 **Live call log dashboard:** [harborview-call-log.lovable.app](https://harborview-call-log.lovable.app)
 
+
+**Video walkthrough:** [Watch the walkthrough on YouTube](https://youtu.be/hDQhpEWwSJE)
+
+## Screenshots
+
+All records shown are test data.
+
+![The n8n workflow: live availability and booking tools called mid-call, the end-of-call report handler, and scheduled reminders.](docs/images/voice-receptionist-workflow.png)
+*The n8n workflow: live availability and booking tools called mid-call, the end-of-call report handler, and scheduled reminders.*
+
+![Lovable call-log dashboard: totals, booked and missed calls, urgency and technician assignment.](docs/images/call-log-dashboard.png)
+*Lovable call-log dashboard: totals, booked and missed calls, urgency and technician assignment.*
+
+![The Airtable call log: caller, property address, issue, category, urgency and outcome for every call.](docs/images/airtable-call-log.png)
+*The Airtable call log: caller, property address, issue, category, urgency and outcome for every call.*
+
 ## The problem this solves
 
 A home service business misses revenue every time the phone rings and nobody
